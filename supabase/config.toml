@@ -1,0 +1,10 @@
+project_id = "qljqdrasjupokvzmqrjd"
+
+[functions.chatbot]
+verify_jwt = false
+
+[functions.disease-detection]
+verify_jwt = false
+
+[functions.weather]
+verify_jwt = false
