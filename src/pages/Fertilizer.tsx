@@ -23,8 +23,9 @@ export default function Fertilizer() {
     setResult(r);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await supabase.from("activity_history").insert([{
-        user_id: user.id, activity_type: "fertilizer", input_data: { crop, soil, stage, type }, result_data: r as unknown as Record<string, unknown>,
+        user_id: user.id, activity_type: "fertilizer", input_data: { crop, soil, stage, type } as any, result_data: r as any,
       }]);
     }
   };

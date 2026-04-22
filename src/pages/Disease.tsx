@@ -39,8 +39,9 @@ export default function Disease() {
         setResult(data);
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await supabase.from("activity_history").insert([{
-            user_id: user.id, activity_type: "disease_detection", input_data: { filename: file.name }, result_data: data as Record<string, unknown>,
+            user_id: user.id, activity_type: "disease_detection", input_data: { filename: file.name } as any, result_data: data as any,
           }]);
         }
       } catch (e: unknown) {
