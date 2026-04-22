@@ -23,9 +23,9 @@ export default function Fertilizer() {
     setResult(r);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase.from("activity_history").insert({
-        user_id: user.id, activity_type: "fertilizer", input_data: { crop, soil, stage, type }, result_data: r,
-      });
+      await supabase.from("activity_history").insert([{
+        user_id: user.id, activity_type: "fertilizer", input_data: { crop, soil, stage, type }, result_data: r as unknown as Record<string, unknown>,
+      }]);
     }
   };
 

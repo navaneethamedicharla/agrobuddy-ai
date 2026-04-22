@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sprout, FlaskConical, Leaf, CloudSun, Bot, Users } from "lucide-react";
 import heroImg from "@/assets/hero-farm.jpg";
 

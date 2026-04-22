@@ -26,11 +26,11 @@ export default function Crops() {
     // Save to history if logged in
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase.from("activity_history").insert({
+      await supabase.from("activity_history").insert([{
         user_id: user.id, activity_type: "crop_recommendation",
         input_data: { region, season, soil, water },
         result_data: { crops: matches.map((m) => m.crop.name) },
-      });
+      }]);
     }
   };
 

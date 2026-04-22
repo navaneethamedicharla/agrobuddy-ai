@@ -39,9 +39,9 @@ export default function Disease() {
         setResult(data);
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          await supabase.from("activity_history").insert({
-            user_id: user.id, activity_type: "disease_detection", input_data: { filename: file.name }, result_data: data,
-          });
+          await supabase.from("activity_history").insert([{
+            user_id: user.id, activity_type: "disease_detection", input_data: { filename: file.name }, result_data: data as Record<string, unknown>,
+          }]);
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Detection failed";
