@@ -2,23 +2,31 @@ import { Link, NavLink as RouterNavLink, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Sprout, Menu, X } from "lucide-react";
+import { Sprout, Menu, X, Languages } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-
-const links = [
-  { to: "/", label: "Home" },
-  { to: "/crops", label: "Crops" },
-  { to: "/fertilizer", label: "Fertilizer" },
-  { to: "/disease", label: "Disease" },
-  { to: "/weather", label: "Weather" },
-  { to: "/chat", label: "Assistant" },
-  { to: "/community", label: "Community" },
-];
+import { useI18n, LANG_LABELS, type Lang } from "@/lib/i18n";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { t, lang, setLang } = useI18n();
+
+  const links = [
+    { to: "/", label: t("nav.home") },
+    { to: "/crops", label: t("nav.crops") },
+    { to: "/fertilizer", label: t("nav.fertilizer") },
+    { to: "/disease", label: t("nav.disease") },
+    { to: "/weather", label: t("nav.weather") },
+    { to: "/chat", label: t("nav.chat") },
+    { to: "/community", label: t("nav.community") },
+  ];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
@@ -31,6 +39,24 @@ export default function Navbar() {
     navigate("/");
   };
 
+  const LangSwitcher = () => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1.5">
+          <Languages className="h-4 w-4" />
+          <span className="text-xs">{LANG_LABELS[lang]}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {(Object.keys(LANG_LABELS) as Lang[]).map((l) => (
+          <DropdownMenuItem key={l} onClick={() => setLang(l)}>
+            {LANG_LABELS[l]}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/80 backdrop-blur-lg">
       <div className="container flex h-16 items-center justify-between">
@@ -38,7 +64,7 @@ export default function Navbar() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-leaf shadow-soft">
             <Sprout className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span>KrishiAI</span>
+          <span>Agrobuddy</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
@@ -59,19 +85,23 @@ export default function Navbar() {
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
+          <LangSwitcher />
           {user ? (
-            <Button variant="outline" size="sm" onClick={signOut}>Sign out</Button>
+            <Button variant="outline" size="sm" onClick={signOut}>{t("nav.signout")}</Button>
           ) : (
             <>
-              <Button variant="ghost" size="sm" asChild><Link to="/auth">Sign in</Link></Button>
-              <Button size="sm" asChild><Link to="/auth">Get started</Link></Button>
+              <Button variant="ghost" size="sm" asChild><Link to="/auth">{t("nav.signin")}</Link></Button>
+              <Button size="sm" asChild><Link to="/auth">{t("nav.getstarted")}</Link></Button>
             </>
           )}
         </div>
 
-        <button className="md:hidden p-2" onClick={() => setOpen(!open)} aria-label="Menu">
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="md:hidden flex items-center gap-1">
+          <LangSwitcher />
+          <button className="p-2" onClick={() => setOpen(!open)} aria-label="Menu">
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       {open && (
@@ -89,9 +119,9 @@ export default function Navbar() {
             ))}
             <div className="border-t border-border/60 pt-2 mt-1">
               {user ? (
-                <Button variant="outline" size="sm" className="w-full" onClick={signOut}>Sign out</Button>
+                <Button variant="outline" size="sm" className="w-full" onClick={signOut}>{t("nav.signout")}</Button>
               ) : (
-                <Button size="sm" className="w-full" asChild><Link to="/auth">Sign in</Link></Button>
+                <Button size="sm" className="w-full" asChild><Link to="/auth">{t("nav.signin")}</Link></Button>
               )}
             </div>
           </div>
