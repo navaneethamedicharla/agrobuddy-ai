@@ -12,8 +12,12 @@ import { useI18n, type Lang } from "@/lib/i18n";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatbot`;
-// Preferred voice locales per language (with fallback to English if not available)
-const SPEECH_LOCALES: Record<Lang, string> = { en: "en-US", te: "te-IN", hi: "hi-IN" };
+const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`;
+// Locales used for SpeechRecognition (voice INPUT only)
+const SPEECH_LOCALES: Record<Lang, string> = { en: "en-IN", te: "te-IN", hi: "hi-IN" };
+
+// Cache generated audio per (lang|text) so re-clicking Speak is instant
+const audioCache = new Map<string, string>();
 
 /**
  * Strip markdown / formatting symbols so TTS reads naturally.
