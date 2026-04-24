@@ -246,54 +246,73 @@ export default function Chat() {
     try { rec.start(); } catch (err) { console.error(err); toast.error("Could not start microphone"); }
   };
 
-  // ---- Voice output (SpeechSynthesis) ----
-  // Warm up voices list (some browsers populate asynchronously)
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.speechSynthesis) return;
-    const sy = window.speechSynthesis;
-    sy.getVoices();
-    const handler = () => sy.getVoices();
-    sy.addEventListener?.("voiceschanged", handler);
-    return () => sy.removeEventListener?.("voiceschanged", handler);
-  }, []);
-
-  const speak = (idx: number, text: string) => {
-    if (typeof window === "undefined" || !window.speechSynthesis) {
-      toast.error("Text-to-speech not supported");
-      return;
-    }
-    if (speakingIdx === idx) {
-      window.speechSynthesis.cancel();
+  // ---- Voice output (API-based TTS — supports Telugu, Hindi, English reliably) ----
+  const speak = async (idx: number, text: string) => {
+    // Toggle stop if already playing this message
+    if (speakingIdx === idx && audioRef.current) {
+      try { audioRef.current.pause(); } catch { /* ignore */ }
+      audioRef.current = null;
       setSpeakingIdx(null);
       return;
     }
-    window.speechSynthesis.cancel();
+    // Stop any other audio
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch { /* ignore */ }
+      audioRef.current = null;
+    }
 
-    // Clean ONLY for speech — never mutate original message content
     const cleaned = cleanTextForSpeech(text);
     if (!cleaned) return;
 
-    const targetLang = SPEECH_LOCALES[language];
-    const voice = pickVoice(targetLang);
+    const cacheKey = `${language}|${cleaned}`;
+    let audioUrl = audioCache.get(cacheKey);
 
-    const u = new SpeechSynthesisUtterance(cleaned);
-    if (voice) {
-      u.voice = voice;
-      u.lang = voice.lang;
-      // Inform user if regional voice unavailable and we fell back
-      if (!voice.lang.toLowerCase().startsWith(targetLang.split("-")[0])) {
-        toast.message(`Voice for ${targetLang} unavailable — using ${voice.lang}`);
+    if (!audioUrl) {
+      setTtsLoadingIdx(idx);
+      try {
+        const resp = await fetch(TTS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({ text: cleaned, language }),
+        });
+        if (resp.status === 429) { toast.error("Rate limit. Please wait."); setTtsLoadingIdx(null); return; }
+        if (resp.status === 402) { toast.error("AI credits exhausted."); setTtsLoadingIdx(null); return; }
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({}));
+          console.error("TTS error", err);
+          toast.error("Could not generate speech");
+          setTtsLoadingIdx(null);
+          return;
+        }
+        const data = await resp.json();
+        if (!data.audio) { toast.error("No audio returned"); setTtsLoadingIdx(null); return; }
+        // Use data URI — browser handles base64 decoding natively
+        audioUrl = `data:${data.mime || "audio/wav"};base64,${data.audio}`;
+        audioCache.set(cacheKey, audioUrl);
+      } catch (e) {
+        console.error(e);
+        toast.error("Failed to generate speech");
+        setTtsLoadingIdx(null);
+        return;
       }
-    } else {
-      u.lang = targetLang;
+      setTtsLoadingIdx(null);
     }
-    u.rate = 1;
-    u.pitch = 1;
-    u.onend = () => setSpeakingIdx(null);
-    u.onerror = () => setSpeakingIdx(null);
-    utteranceRef.current = u;
+
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
     setSpeakingIdx(idx);
-    window.speechSynthesis.speak(u);
+    audio.onended = () => { setSpeakingIdx(null); audioRef.current = null; };
+    audio.onerror = () => { setSpeakingIdx(null); audioRef.current = null; toast.error("Playback failed"); };
+    try {
+      await audio.play();
+    } catch (e) {
+      console.error(e);
+      setSpeakingIdx(null);
+      toast.error("Playback blocked by browser");
+    }
   };
 
   return (
