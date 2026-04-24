@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +12,58 @@ import { useI18n, type Lang } from "@/lib/i18n";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatbot`;
-const SPEECH_LOCALES: Record<Lang, string> = { en: "en-IN", te: "te-IN", hi: "hi-IN" };
+// Preferred voice locales per language (with fallback to English if not available)
+const SPEECH_LOCALES: Record<Lang, string> = { en: "en-US", te: "te-IN", hi: "hi-IN" };
+
+/**
+ * Strip markdown / formatting symbols so TTS reads naturally.
+ * Used ONLY for speech — never mutates displayed message content.
+ */
+function cleanTextForSpeech(input: string): string {
+  let t = input;
+  // Remove code fences and inline code
+  t = t.replace(/```[\s\S]*?```/g, " ");
+  t = t.replace(/`([^`]+)`/g, "$1");
+  // Images / links -> keep label only
+  t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");
+  t = t.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1");
+  // Headings (#, ##, ###...)
+  t = t.replace(/^\s{0,3}#{1,6}\s+/gm, "");
+  // Blockquotes
+  t = t.replace(/^\s{0,3}>\s?/gm, "");
+  // Bold / italics / strikethrough markers (*, **, ***, _, __, ~~)
+  t = t.replace(/(\*\*\*|\*\*|\*|___|__|_|~~)/g, "");
+  // Bullet points: -, *, •, +  and numbered lists "1." -> natural pause
+  t = t.replace(/^\s*[-*•+]\s+/gm, "");
+  t = t.replace(/^\s*\d+\.\s+/gm, "");
+  // Horizontal rules
+  t = t.replace(/^\s*([-*_])\1{2,}\s*$/gm, "");
+  // Tables pipes
+  t = t.replace(/\|/g, " ");
+  // Line breaks -> natural pause
+  t = t.replace(/\n{2,}/g, ". ");
+  t = t.replace(/\n/g, ", ");
+  // Collapse whitespace and stray punctuation
+  t = t.replace(/\s+/g, " ");
+  t = t.replace(/\s+([,.!?;:])/g, "$1");
+  t = t.replace(/([,.!?;:]){2,}/g, "$1");
+  return t.trim();
+}
+
+/** Pick the best available voice for a BCP-47 lang tag, with English fallback. */
+function pickVoice(langTag: string): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const base = langTag.split("-")[0].toLowerCase();
+  return (
+    voices.find((v) => v.lang.toLowerCase() === langTag.toLowerCase()) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith(base + "-")) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith("en")) ||
+    voices[0] ||
+    null
+  );
+}
 
 // Module-level cache: { lang|prompt -> response }
 const responseCache = new Map<string, string>();
