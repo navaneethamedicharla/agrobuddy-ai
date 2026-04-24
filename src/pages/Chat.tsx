@@ -257,73 +257,35 @@ export default function Chat() {
     try { rec.start(); } catch (err) { console.error(err); toast.error("Could not start microphone"); }
   };
 
-  // ---- Voice output (API-based TTS — supports Telugu, Hindi, English reliably) ----
-  const speak = async (idx: number, text: string) => {
-    // Toggle stop if already playing this message
-    if (speakingIdx === idx && audioRef.current) {
-      try { audioRef.current.pause(); } catch { /* ignore */ }
-      audioRef.current = null;
+  // ---- Voice output (browser SpeechSynthesis) ----
+  const speak = (idx: number, text: string) => {
+    const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
+    if (!synth) {
+      toast.error("Speech not supported in this browser");
+      return;
+    }
+    // Toggle stop if already speaking this message
+    if (speakingIdx === idx) {
+      synth.cancel();
       setSpeakingIdx(null);
       return;
     }
-    // Stop any other audio
-    if (audioRef.current) {
-      try { audioRef.current.pause(); } catch { /* ignore */ }
-      audioRef.current = null;
-    }
+    synth.cancel();
 
     const cleaned = cleanTextForSpeech(text);
     if (!cleaned) return;
 
-    const cacheKey = `${language}|${cleaned}`;
-    let audioUrl = audioCache.get(cacheKey);
+    const utter = new SpeechSynthesisUtterance(cleaned);
+    const voice = pickVoice(language);
+    if (voice) utter.voice = voice;
+    utter.lang = voice?.lang || SPEECH_LOCALES[language];
+    utter.rate = 1;
+    utter.pitch = 1;
+    utter.onend = () => setSpeakingIdx(null);
+    utter.onerror = () => { setSpeakingIdx(null); };
 
-    if (!audioUrl) {
-      setTtsLoadingIdx(idx);
-      try {
-        const resp = await fetch(TTS_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ text: cleaned, language }),
-        });
-        if (resp.status === 429) { toast.error("Rate limit. Please wait."); setTtsLoadingIdx(null); return; }
-        if (resp.status === 402) { toast.error("AI credits exhausted."); setTtsLoadingIdx(null); return; }
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          console.error("TTS error", err);
-          toast.error("Could not generate speech");
-          setTtsLoadingIdx(null);
-          return;
-        }
-        const data = await resp.json();
-        if (!data.audio) { toast.error("No audio returned"); setTtsLoadingIdx(null); return; }
-        // Use data URI — browser handles base64 decoding natively
-        audioUrl = `data:${data.mime || "audio/wav"};base64,${data.audio}`;
-        audioCache.set(cacheKey, audioUrl);
-      } catch (e) {
-        console.error(e);
-        toast.error("Failed to generate speech");
-        setTtsLoadingIdx(null);
-        return;
-      }
-      setTtsLoadingIdx(null);
-    }
-
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
     setSpeakingIdx(idx);
-    audio.onended = () => { setSpeakingIdx(null); audioRef.current = null; };
-    audio.onerror = () => { setSpeakingIdx(null); audioRef.current = null; toast.error("Playback failed"); };
-    try {
-      await audio.play();
-    } catch (e) {
-      console.error(e);
-      setSpeakingIdx(null);
-      toast.error("Playback blocked by browser");
-    }
+    synth.speak(utter);
   };
 
   return (
