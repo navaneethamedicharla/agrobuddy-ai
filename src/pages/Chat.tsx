@@ -256,6 +256,16 @@ export default function Chat() {
   };
 
   // ---- Voice output (SpeechSynthesis) ----
+  // Warm up voices list (some browsers populate asynchronously)
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const sy = window.speechSynthesis;
+    sy.getVoices();
+    const handler = () => sy.getVoices();
+    sy.addEventListener?.("voiceschanged", handler);
+    return () => sy.removeEventListener?.("voiceschanged", handler);
+  }, []);
+
   const speak = (idx: number, text: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       toast.error("Text-to-speech not supported");
@@ -267,9 +277,27 @@ export default function Chat() {
       return;
     }
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = SPEECH_LOCALES[language];
+
+    // Clean ONLY for speech — never mutate original message content
+    const cleaned = cleanTextForSpeech(text);
+    if (!cleaned) return;
+
+    const targetLang = SPEECH_LOCALES[language];
+    const voice = pickVoice(targetLang);
+
+    const u = new SpeechSynthesisUtterance(cleaned);
+    if (voice) {
+      u.voice = voice;
+      u.lang = voice.lang;
+      // Inform user if regional voice unavailable and we fell back
+      if (!voice.lang.toLowerCase().startsWith(targetLang.split("-")[0])) {
+        toast.message(`Voice for ${targetLang} unavailable — using ${voice.lang}`);
+      }
+    } else {
+      u.lang = targetLang;
+    }
     u.rate = 1;
+    u.pitch = 1;
     u.onend = () => setSpeakingIdx(null);
     u.onerror = () => setSpeakingIdx(null);
     utteranceRef.current = u;
