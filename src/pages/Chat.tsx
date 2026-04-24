@@ -362,11 +362,16 @@ export default function Chat() {
                 {m.role === "assistant" && m.content && (
                   <button
                     onClick={() => speak(i, m.content)}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-smooth px-1"
+                    disabled={ttsLoadingIdx === i}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-smooth px-1 disabled:opacity-60"
                     aria-label={speakingIdx === i ? "Stop speaking" : "Speak message"}
                   >
-                    {speakingIdx === i ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
-                    <span>{speakingIdx === i ? "Stop" : "Speak"}</span>
+                    {ttsLoadingIdx === i
+                      ? <Loader2 className="h-3 w-3 animate-spin" />
+                      : speakingIdx === i ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+                    <span>
+                      {ttsLoadingIdx === i ? "Loading…" : speakingIdx === i ? "Stop" : "Speak"}
+                    </span>
                   </button>
                 )}
               </div>
