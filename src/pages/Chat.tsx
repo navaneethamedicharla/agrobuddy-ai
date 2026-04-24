@@ -12,12 +12,23 @@ import { useI18n, type Lang } from "@/lib/i18n";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatbot`;
-const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`;
-// Locales used for SpeechRecognition (voice INPUT only)
-const SPEECH_LOCALES: Record<Lang, string> = { en: "en-IN", te: "te-IN", hi: "hi-IN" };
+// Locales used for SpeechRecognition (voice INPUT) and SpeechSynthesis (voice OUTPUT)
+const SPEECH_LOCALES: Record<Lang, string> = { en: "en-US", te: "te-IN", hi: "hi-IN" };
 
-// Cache generated audio per (lang|text) so re-clicking Speak is instant
-const audioCache = new Map<string, string>();
+// Pick the best matching voice for a given language code
+function pickVoice(lang: Lang): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const target = SPEECH_LOCALES[lang].toLowerCase();
+  const prefix = lang.toLowerCase();
+  return (
+    voices.find((v) => v.lang.toLowerCase() === target) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith(prefix)) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith("en")) ||
+    null
+  );
+}
 
 /**
  * Strip markdown / formatting symbols so TTS reads naturally.
@@ -81,9 +92,7 @@ export default function Chat() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const sendRef = useRef<(text?: string) => void>(() => {});
-  const [ttsLoadingIdx, setTtsLoadingIdx] = useState<number | null>(null);
 
   // Update greeting when language changes (only if it's still the initial single-msg state)
   useEffect(() => {
@@ -103,7 +112,7 @@ export default function Chat() {
   useEffect(() => {
     return () => {
       try { recognitionRef.current?.stop(); } catch { /* ignore */ }
-      try { audioRef.current?.pause(); } catch { /* ignore */ }
+      try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
     };
   }, []);
 
@@ -246,73 +255,35 @@ export default function Chat() {
     try { rec.start(); } catch (err) { console.error(err); toast.error("Could not start microphone"); }
   };
 
-  // ---- Voice output (API-based TTS — supports Telugu, Hindi, English reliably) ----
-  const speak = async (idx: number, text: string) => {
-    // Toggle stop if already playing this message
-    if (speakingIdx === idx && audioRef.current) {
-      try { audioRef.current.pause(); } catch { /* ignore */ }
-      audioRef.current = null;
+  // ---- Voice output (browser SpeechSynthesis) ----
+  const speak = (idx: number, text: string) => {
+    const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
+    if (!synth) {
+      toast.error("Speech not supported in this browser");
+      return;
+    }
+    // Toggle stop if already speaking this message
+    if (speakingIdx === idx) {
+      synth.cancel();
       setSpeakingIdx(null);
       return;
     }
-    // Stop any other audio
-    if (audioRef.current) {
-      try { audioRef.current.pause(); } catch { /* ignore */ }
-      audioRef.current = null;
-    }
+    synth.cancel();
 
     const cleaned = cleanTextForSpeech(text);
     if (!cleaned) return;
 
-    const cacheKey = `${language}|${cleaned}`;
-    let audioUrl = audioCache.get(cacheKey);
+    const utter = new SpeechSynthesisUtterance(cleaned);
+    const voice = pickVoice(language);
+    if (voice) utter.voice = voice;
+    utter.lang = voice?.lang || SPEECH_LOCALES[language];
+    utter.rate = 1;
+    utter.pitch = 1;
+    utter.onend = () => setSpeakingIdx(null);
+    utter.onerror = () => { setSpeakingIdx(null); };
 
-    if (!audioUrl) {
-      setTtsLoadingIdx(idx);
-      try {
-        const resp = await fetch(TTS_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({ text: cleaned, language }),
-        });
-        if (resp.status === 429) { toast.error("Rate limit. Please wait."); setTtsLoadingIdx(null); return; }
-        if (resp.status === 402) { toast.error("AI credits exhausted."); setTtsLoadingIdx(null); return; }
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          console.error("TTS error", err);
-          toast.error("Could not generate speech");
-          setTtsLoadingIdx(null);
-          return;
-        }
-        const data = await resp.json();
-        if (!data.audio) { toast.error("No audio returned"); setTtsLoadingIdx(null); return; }
-        // Use data URI — browser handles base64 decoding natively
-        audioUrl = `data:${data.mime || "audio/wav"};base64,${data.audio}`;
-        audioCache.set(cacheKey, audioUrl);
-      } catch (e) {
-        console.error(e);
-        toast.error("Failed to generate speech");
-        setTtsLoadingIdx(null);
-        return;
-      }
-      setTtsLoadingIdx(null);
-    }
-
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
     setSpeakingIdx(idx);
-    audio.onended = () => { setSpeakingIdx(null); audioRef.current = null; };
-    audio.onerror = () => { setSpeakingIdx(null); audioRef.current = null; toast.error("Playback failed"); };
-    try {
-      await audio.play();
-    } catch (e) {
-      console.error(e);
-      setSpeakingIdx(null);
-      toast.error("Playback blocked by browser");
-    }
+    synth.speak(utter);
   };
 
   return (
@@ -362,16 +333,11 @@ export default function Chat() {
                 {m.role === "assistant" && m.content && (
                   <button
                     onClick={() => speak(i, m.content)}
-                    disabled={ttsLoadingIdx === i}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-smooth px-1 disabled:opacity-60"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-smooth px-1"
                     aria-label={speakingIdx === i ? "Stop speaking" : "Speak message"}
                   >
-                    {ttsLoadingIdx === i
-                      ? <Loader2 className="h-3 w-3 animate-spin" />
-                      : speakingIdx === i ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
-                    <span>
-                      {ttsLoadingIdx === i ? "Loading…" : speakingIdx === i ? "Stop" : "Speak"}
-                    </span>
+                    {speakingIdx === i ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+                    <span>{speakingIdx === i ? "Stop" : "Speak"}</span>
                   </button>
                 )}
               </div>
