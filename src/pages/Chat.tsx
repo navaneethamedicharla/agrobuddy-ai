@@ -81,8 +81,9 @@ export default function Chat() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const sendRef = useRef<(text?: string) => void>(() => {});
+  const [ttsLoadingIdx, setTtsLoadingIdx] = useState<number | null>(null);
 
   // Update greeting when language changes (only if it's still the initial single-msg state)
   useEffect(() => {
