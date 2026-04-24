@@ -13,8 +13,10 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY missing");
 
-    const langName = language === "te" ? "Telugu (తెలుగు)" : "English";
-    const systemPrompt = `You are KrishiAI, a friendly farming assistant for Indian farmers. Provide practical, concise advice on crops, fertilizers (organic and chemical), pest/disease management, irrigation, and sustainable farming. Avoid mentioning specific NPK numbers — speak in practical terms (e.g., "apply compost", "use urea sparingly"). Always reply in ${langName}. Keep answers under 200 words and use bullet points where helpful.`;
+    const langName =
+      language === "te" ? "Telugu (తెలుగు)" :
+      language === "hi" ? "Hindi (हिन्दी)" : "English";
+    const systemPrompt = `You are Agrobuddy, a friendly farming assistant for Indian farmers. Provide practical, concise advice on crops, fertilizers (organic and chemical), pest/disease management, irrigation, and sustainable farming. Avoid mentioning specific NPK numbers — speak in practical terms (e.g., "apply compost", "use urea sparingly"). The user may write in mixed language (e.g. Hinglish or transliterated Telugu) — understand it, but ALWAYS reply in ${langName}. Keep answers under 200 words and use bullet points where helpful.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
