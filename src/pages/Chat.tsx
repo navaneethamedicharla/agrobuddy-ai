@@ -99,11 +99,11 @@ export default function Chat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, interim]);
 
-  // Cleanup speech on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       try { recognitionRef.current?.stop(); } catch { /* ignore */ }
-      if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+      try { audioRef.current?.pause(); } catch { /* ignore */ }
     };
   }, []);
 
