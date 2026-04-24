@@ -54,20 +54,6 @@ function cleanTextForSpeech(input: string): string {
   return t.trim();
 }
 
-/** Pick the best available voice for a BCP-47 lang tag, with English fallback. */
-function pickVoice(langTag: string): SpeechSynthesisVoice | null {
-  if (typeof window === "undefined" || !window.speechSynthesis) return null;
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices.length) return null;
-  const base = langTag.split("-")[0].toLowerCase();
-  return (
-    voices.find((v) => v.lang.toLowerCase() === langTag.toLowerCase()) ||
-    voices.find((v) => v.lang.toLowerCase().startsWith(base + "-")) ||
-    voices.find((v) => v.lang.toLowerCase().startsWith("en")) ||
-    voices[0] ||
-    null
-  );
-}
 
 // Module-level cache: { lang|prompt -> response }
 const responseCache = new Map<string, string>();
