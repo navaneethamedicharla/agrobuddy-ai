@@ -112,7 +112,7 @@ export default function Chat() {
   useEffect(() => {
     return () => {
       try { recognitionRef.current?.stop(); } catch { /* ignore */ }
-      try { audioRef.current?.pause(); } catch { /* ignore */ }
+      try { window.speechSynthesis?.cancel(); } catch { /* ignore */ }
     };
   }, []);
 
