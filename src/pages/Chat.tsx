@@ -12,12 +12,23 @@ import { useI18n, type Lang } from "@/lib/i18n";
 type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chatbot`;
-const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tts`;
-// Locales used for SpeechRecognition (voice INPUT only)
-const SPEECH_LOCALES: Record<Lang, string> = { en: "en-IN", te: "te-IN", hi: "hi-IN" };
+// Locales used for SpeechRecognition (voice INPUT) and SpeechSynthesis (voice OUTPUT)
+const SPEECH_LOCALES: Record<Lang, string> = { en: "en-US", te: "te-IN", hi: "hi-IN" };
 
-// Cache generated audio per (lang|text) so re-clicking Speak is instant
-const audioCache = new Map<string, string>();
+// Pick the best matching voice for a given language code
+function pickVoice(lang: Lang): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return null;
+  const target = SPEECH_LOCALES[lang].toLowerCase();
+  const prefix = lang.toLowerCase();
+  return (
+    voices.find((v) => v.lang.toLowerCase() === target) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith(prefix)) ||
+    voices.find((v) => v.lang.toLowerCase().startsWith("en")) ||
+    null
+  );
+}
 
 /**
  * Strip markdown / formatting symbols so TTS reads naturally.
