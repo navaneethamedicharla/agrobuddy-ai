@@ -338,10 +338,16 @@ export default function Chat() {
                 </div>
               )}
               <div className={`flex flex-col gap-1 max-w-[80%] ${m.role === "user" ? "items-end" : "items-start"}`}>
-                <div className={`px-4 py-2.5 rounded-2xl text-sm whitespace-pre-wrap ${
-                  m.role === "user" ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-secondary rounded-tl-sm"
+                <div className={`px-4 py-2.5 rounded-2xl text-sm ${
+                  m.role === "user"
+                    ? "bg-primary text-primary-foreground rounded-tr-sm whitespace-pre-wrap"
+                    : "bg-secondary rounded-tl-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-2"
                 }`}>
-                  {m.content || <Loader2 className="h-3 w-3 animate-spin inline" />}
+                  {m.content
+                    ? (m.role === "assistant"
+                        ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                        : m.content)
+                    : <Loader2 className="h-3 w-3 animate-spin inline" />}
                 </div>
                 {m.role === "assistant" && m.content && (
                   <button
